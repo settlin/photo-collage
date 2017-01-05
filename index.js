@@ -4,13 +4,13 @@ const Canvas   = require("canvas");
 const fs       = Promise.promisifyAll(require("fs"));
 
 function downloadPhoto(uri) {
-	return new Promise((resolve, reject) => {
-		let data;
+	return new Promise(function(resolve, reject) {
+		var data;
 
 		const stream = request(uri);
 		stream.on("data", function(chunk) { data = data ? Buffer.concat([data, chunk]) : chunk; });
 		stream.on("error", reject);
-		stream.on("end", () => resolve(data));
+		stream.on("end", function() { return resolve(data); });
 	});
 }
 
@@ -21,21 +21,21 @@ function getPhoto(src) {
 	else if (typeof src === "string") {
 		if (/^http/.test(src) || /^ftp/.test(src)) {
 			return downloadPhoto(src)
-        .catch(() => {throw new Error(`Could not download url source: ${src}`);});
+        .catch(function() {throw new Error("Could not download url source: " + src);});
 		}
 		return fs.readFileAsync(src)
-      .catch(() => {throw new Error(`Could not load file source: ${src}`);});
+      .catch(function() {throw new Error("Could not load file source: " + src);});
 	}
 	else if (src instanceof Canvas) {
 		return src.toBuffer();
 	}
-	throw new Error(`Unsupported source type: ${src}`);
+	throw new Error("Unsupported source type: " + src);
 }
 
 function wrapText(context, text, x, y, maxWidth, lineHeight) {
 	var words = text.split(" ");
 	var line = "";
-	let initialY = y;
+	var initialY = y;
 
 	for (var n = 0; n < words.length; n++) {
 		var testLine = line + words[n] + " ";
@@ -71,7 +71,7 @@ module.exports = function(options) {
 		options = {sources: options};
 	}
 
-	PARAMS.forEach((param) => {
+	PARAMS.forEach(function(param) {
 		if (options[param.field]) {
 			return;
 		}
@@ -79,7 +79,7 @@ module.exports = function(options) {
 			options[param.field] = param.default;
 		}
 		else if (param.required) {
-			throw new Error(`Missing required option: ${param.field}`);
+			throw new Error("Missing required option: " + param.field);
 		}
 	});
 
@@ -92,46 +92,42 @@ module.exports = function(options) {
 	ctx.fillStyle = options.backgroundColor;
 	ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 	const sources = options.sources;
-	let maxImages = options.width * options.height;
+	var maxImages = options.width * options.height;
 	if ((options.header || {}).image) {
 		maxImages += 1;
 		sources.unshift(options.header.image);
 	}
 
-	return Promise
-    .map(sources, getPhoto)
-    .each((photoBuffer, i) => {
-	if (i >= maxImages) return;
+	return Promise.map(sources, getPhoto).each(function(photoBuffer, i) {
+		if (i >= maxImages) return;
 
-	const img = new Canvas.Image();
-	img.src = photoBuffer;
+		const img = new Canvas.Image();
+		img.src = photoBuffer;
 
-	if ((options.header || {}).image) { // only for header
-		if (!i) { // first time
-			ctx.drawImage(img, 0, 0, canvasWidth, options.header.height);
-			return;
+		if ((options.header || {}).image) { // only for header
+			if (!i) { // first time
+				ctx.drawImage(img, 0, 0, canvasWidth, options.header.height);
+				return;
+			}
+			i -= 1;
 		}
-		i -= 1;
-	}
 
-	const x = (i % options.width) * (options.imageWidth + options.spacing);
-	const y = Math.floor(i / options.width) * (options.imageHeight + options.spacing);
-	ctx.drawImage(img, x, y + headerHeight, options.imageWidth, options.imageHeight);
-})
-    .then(() => {
-	if (options.text) {
-		ctx.font = (options.textStyle.fontSize || "20") + "px " + (options.textStyle.font || "Helvetica");
-		wrapText(ctx, options.text, 10, canvasHeight - (options.textStyle.height || 200) + 50, canvasWidth - 10, (options.textStyle.fontSize || 20) * 1.2);
-	}
-	else {
-		let curHeight = 150;
-		options.lines.map((line) => {
-			ctx.font = line.font || "20px Helvetica";
-			ctx.fillStyle = line.color || "#333333";
-			const heightUsed = wrapText(ctx, line.text, 10, canvasHeight - curHeight, canvasWidth - 10, (parseInt(line.font, 10) || 20) * 1.2);
-			curHeight -= heightUsed;
-		});
-	}
-})
-    .return(canvas);
+		const x = (i % options.width) * (options.imageWidth + options.spacing);
+		const y = Math.floor(i / options.width) * (options.imageHeight + options.spacing);
+		ctx.drawImage(img, x, y + headerHeight, options.imageWidth, options.imageHeight);
+	}).then(function() {
+		if (options.text) {
+			ctx.font = (options.textStyle.fontSize || "20") + "px " + (options.textStyle.font || "Helvetica");
+			wrapText(ctx, options.text, 10, canvasHeight - (options.textStyle.height || 200) + 50, canvasWidth - 10, (options.textStyle.fontSize || 20) * 1.2);
+		}
+		else {
+			var curHeight = 150;
+			options.lines.map(function(line) {
+				ctx.font = line.font || "20px Helvetica";
+				ctx.fillStyle = line.color || "#333333";
+				const heightUsed = wrapText(ctx, line.text, 10, canvasHeight - curHeight, canvasWidth - 10, (parseInt(line.font, 10) || 20) * 1.2);
+				curHeight -= heightUsed;
+			});
+		}
+	}).return(canvas);
 };
